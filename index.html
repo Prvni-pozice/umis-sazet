@@ -141,6 +141,13 @@
     .target-marker.edge { opacity: 0.92; }
     .target-marker.edge .ic { font-size: 1.15rem; }
     .target-marker.edge .dist { display: none; }
+    /* navigace na nejbližší vodu (fáze zalévání) */
+    .target-marker.water .ic { font-size: 1.8rem; }
+    .target-marker.water .dist { display: block; color: #bfe7ff; background: rgba(12, 42, 64, 0.65); font-weight: 600; }
+    .target-marker.water.edge .ic { font-size: 1.45rem; }
+    .target-marker.water.edge .dist { display: block; }
+    .target-marker.water.urgent .ic { animation: waterPulse 1.1s ease-in-out infinite; }
+    @keyframes waterPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.35); } }
 
     #touch-ui { position: fixed; inset: 0; z-index: 5; display: none; pointer-events: none; }
     #touch-ui.visible { display: block; }

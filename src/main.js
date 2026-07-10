@@ -372,8 +372,8 @@ class Game {
   }
 
   // Markery cílů: 🌱 nad nezasazenými záhony (fáze 1), 💧 nad nezalitými
-  // sazenicemi (fáze 2). Zobrazuje se nejbližších 8, mimo obrazovku se
-  // přichytí k okraji jako šipka.
+  // sazenicemi + 🪣 k nejbližšímu rybníčku (fáze 2). Zobrazuje se nejbližších
+  // 8 sazenic, mimo obrazovku se přichytí k okraji jako šipka.
   _updateTargetMarkers() {
     const container = document.getElementById('target-markers')
     const show = (this.state === 'planting' || this.state === 'watering') && !this.paused
@@ -386,9 +386,15 @@ class Game {
 
     const icon = this.state === 'planting' ? '🌱' : '💧'
     const targets = this.planting.pendingTargets(this.state)
-      .map(p => ({ p, d: this.player.pos.distanceTo(p.pos) }))
+      .map(p => ({ pos: p.pos, d: this.player.pos.distanceTo(p.pos), icon, water: false, lift: 1.8 }))
       .sort((a, b) => a.d - b.d)
       .slice(0, 8)
+
+    // fáze zalévání: navigace i na nejbližší vodu (zvýrazní se s prázdným vědrem)
+    if (this.state === 'watering') {
+      const pond = this.world.nearestPond(this.player.pos)
+      if (pond) targets.push({ pos: pond.pos, d: pond.d, icon: '🪣', water: true, lift: 0.8 })
+    }
 
     const W = window.innerWidth, H = window.innerHeight
     const cx = W / 2, cy = H / 2, pad = 36
@@ -396,7 +402,7 @@ class Game {
     this.camera.getWorldDirection(this._markFwd)
     let mi = 0
 
-    for (const { p, d } of targets) {
+    for (const tgt of targets) {
       let el = this._markers[mi]
       if (!el) {
         el = document.createElement('div')
@@ -406,10 +412,12 @@ class Game {
         this._markers[mi] = el
       }
       el.style.display = 'flex'
-      el.querySelector('.ic').textContent = icon
+      el.querySelector('.ic').textContent = tgt.icon
+      el.classList.toggle('water', tgt.water)
+      el.classList.toggle('urgent', tgt.water && this.water === 0)
 
       const t = this._markTmp
-      t.copy(p.pos); t.y += 1.8
+      t.copy(tgt.pos); t.y += tgt.lift
       const behind = t.clone().sub(camPos).dot(this._markFwd) < 0
       t.project(this.camera)
       let sx = (t.x * 0.5 + 0.5) * W
@@ -427,7 +435,9 @@ class Game {
       el.style.left = sx + 'px'
       el.style.top = sy + 'px'
       el.classList.toggle('edge', offscreen)
-      if (!offscreen) el.querySelector('.dist').textContent = Math.round(d) + ' m'
+      const distEl = el.querySelector('.dist')
+      // vodní marker ukazuje vzdálenost i na okraji (ať víš, jak daleko běžet)
+      if (!offscreen || tgt.water) distEl.textContent = Math.round(tgt.d) + ' m'
       mi++
     }
     for (let j = mi; j < this._markers.length; j++) this._markers[j].style.display = 'none'

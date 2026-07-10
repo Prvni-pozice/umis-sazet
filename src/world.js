@@ -260,22 +260,24 @@ export class World {
     }
   }
 
-  // ── rybníky: 2 mělké deprese pod hladinu (vodní plocha je zaplaví sama).
+  // ── rybníčky: 6 malých mělkých depresí pod hladinu (vodní plocha je
+  // zaplaví sama). Relativně často po mapě, aby zalévání netrvalo věčnost.
   // Jen heightmapa — pozvolnost dorovná _smoothTerrain, bloky dá _fillBlocks. ──
   _carvePonds() {
     this.ponds = []
-    for (let p = 0; p < 2; p++) {
+    const COUNT = 6
+    for (let p = 0; p < COUNT; p++) {
       let spot = null
-      for (let i = 0; i < 400; i++) {
-        const x = 30 + Math.floor(this.rng() * (SIZE - 60))
-        const z = 30 + Math.floor(this.rng() * (SIZE - 60))
+      for (let i = 0; i < 800; i++) {
+        const x = 20 + Math.floor(this.rng() * (SIZE - 40))
+        const z = 20 + Math.floor(this.rng() * (SIZE - 40))
         const h = this.heightMap[z * SIZE + x]
-        if (h > BASE_LEVEL + 2) continue // rovinatější místa u základní úrovně
-        if (this.ponds.some(q => Math.hypot(q.x - x, q.z - z) < 70)) continue
+        if (h > BASE_LEVEL + 3) continue // rovinatější místa u základní úrovně
+        if (this.ponds.some(q => Math.hypot(q.x - x, q.z - z) < 42)) continue
         spot = { x, z }; break
       }
       if (!spot) continue
-      const R = 8 + Math.floor(this.rng() * 4)
+      const R = 5 + Math.floor(this.rng() * 4)
       for (let dz = -R; dz <= R; dz++) {
         for (let dx = -R; dx <= R; dx++) {
           const x = spot.x + dx, z = spot.z + dz
@@ -290,6 +292,17 @@ export class World {
       }
       this.ponds.push({ x: spot.x, z: spot.z, r: R })
     }
+  }
+
+  /** Střed nejbližšího rybníčku (pro navigaci ve fázi zalévání). */
+  nearestPond(pos) {
+    let best = null, bestD = Infinity
+    for (const p of this.ponds) {
+      const d = Math.hypot(pos.x - p.x, pos.z - p.z)
+      if (d < bestD) { bestD = d; best = p }
+    }
+    if (!best) return null
+    return { pos: new THREE.Vector3(best.x + 0.5, this.waterY, best.z + 0.5), d: bestD }
   }
 
   // ── vyhlazení: mezi sousedními sloupci max 1 blok převýšení ──
