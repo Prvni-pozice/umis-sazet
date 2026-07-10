@@ -1,0 +1,173 @@
+// audio.js — zvuky generované WebAudio (žádné externí soubory):
+// kroky, skok, šplouchnutí, pípnutí zvířete, sázení, nabírání a lití vody,
+// růst stromku, fanfára v cíli. AudioContext až na user gesture (iOS).
+const MUTE_KEY = 'umis-sazet-muted'
+
+export class AudioFX {
+  constructor() {
+    this.ctx = null
+    this.muted = localStorage.getItem(MUTE_KEY) === '1'
+  }
+
+  /** Volat z user gesture (klik na Start) */
+  init() {
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext
+      if (!AC) return
+      this.ctx = new AC()
+      this.master = this.ctx.createGain()
+      this.master.gain.value = this.muted ? 0 : 0.25
+      this.master.connect(this.ctx.destination)
+
+      // sdílený noise buffer (1 s bílého šumu)
+      const len = this.ctx.sampleRate
+      this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate)
+      const data = this.noiseBuf.getChannelData(0)
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume()
+  }
+
+  toggleMute() {
+    this.muted = !this.muted
+    localStorage.setItem(MUTE_KEY, this.muted ? '1' : '0')
+    if (this.master) this.master.gain.value = this.muted ? 0 : 0.25
+    return this.muted
+  }
+
+  _ready() { return this.ctx && this.ctx.state === 'running' && !this.muted }
+
+  _noise({ dur, filterType, f0, f1, gain }) {
+    const t = this.ctx.currentTime
+    const src = this.ctx.createBufferSource()
+    src.buffer = this.noiseBuf
+    src.loop = true
+    const filter = this.ctx.createBiquadFilter()
+    filter.type = filterType
+    filter.frequency.setValueAtTime(f0, t)
+    if (f1 !== undefined) filter.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur)
+    const g = this.ctx.createGain()
+    g.gain.setValueAtTime(gain, t)
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur)
+    src.connect(filter).connect(g).connect(this.master)
+    src.start(t)
+    src.stop(t + dur + 0.02)
+  }
+
+  _tone({ dur, type = 'triangle', f0, f1, gain, delay = 0 }) {
+    const t = this.ctx.currentTime + delay
+    const osc = this.ctx.createOscillator()
+    osc.type = type
+    osc.frequency.setValueAtTime(f0, t)
+    if (f1 !== undefined) osc.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur)
+    const g = this.ctx.createGain()
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.015)
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur)
+    osc.connect(g).connect(this.master)
+    osc.start(t)
+    osc.stop(t + dur + 0.02)
+  }
+
+  step() {
+    if (!this._ready()) return
+    this._noise({ dur: 0.07, filterType: 'bandpass', f0: 380 + Math.random() * 250, gain: 0.35 })
+  }
+
+  jump() {
+    if (!this._ready()) return
+    this._tone({ dur: 0.16, type: 'sine', f0: 280, f1: 520, gain: 0.18 })
+  }
+
+  splash() {
+    if (!this._ready()) return
+    this._noise({ dur: 0.4, filterType: 'lowpass', f0: 1400, f1: 260, gain: 0.7 })
+  }
+
+  // šustění trávy / hrabání sena při chůzi loukou — měkký šum se sweepem
+  // (dlouhý „šššp", ne krátké praskavé údery)
+  grass() {
+    if (!this._ready()) return
+    const t = this.ctx.currentTime
+    const dur = 0.28 + Math.random() * 0.12
+    const src = this.ctx.createBufferSource()
+    src.buffer = this.noiseBuf
+    src.loop = true
+    const bp = this.ctx.createBiquadFilter()
+    bp.type = 'bandpass'
+    bp.Q.value = 0.6 // široké pásmo = přirozené šustění, ne pískavé
+    const f0 = 1500 + Math.random() * 500
+    bp.frequency.setValueAtTime(f0, t)
+    bp.frequency.linearRampToValueAtTime(f0 * 1.7, t + dur) // jemný sweep = pohyb stébel
+    const hp = this.ctx.createBiquadFilter()
+    hp.type = 'highpass'; hp.frequency.value = 650
+    const g = this.ctx.createGain()
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.linearRampToValueAtTime(0.2, t + 0.05) // měkký nástup (žádný lupanec)
+    g.gain.exponentialRampToValueAtTime(0.0008, t + dur)
+    src.connect(bp).connect(hp).connect(g).connect(this.master)
+    src.start(t)
+    src.stop(t + dur + 0.02)
+  }
+
+  squeak() {
+    if (!this._ready()) return
+    const f = 750 + Math.random() * 700
+    this._tone({ dur: 0.09, type: 'triangle', f0: f, f1: f * 1.5, gain: 0.22 })
+    this._tone({ dur: 0.08, type: 'triangle', f0: f * 1.3, f1: f * 0.9, gain: 0.14, delay: 0.09 })
+  }
+
+  bonus() {
+    if (!this._ready()) return
+    // veselý vzestupný trylek
+    const notes = [659.25, 880, 1174.7]
+    notes.forEach((f, i) => this._tone({ dur: 0.16, type: 'triangle', f0: f, f1: f * 1.05, gain: 0.28, delay: i * 0.07 }))
+    this._tone({ dur: 0.3, type: 'sine', f0: 1318.5, gain: 0.14, delay: 0.21 })
+  }
+
+  // zasazení: tupé „žuch" do hlíny + drobné plesknutí
+  plant() {
+    if (!this._ready()) return
+    this._noise({ dur: 0.12, filterType: 'lowpass', f0: 420, f1: 140, gain: 0.55 })
+    this._tone({ dur: 0.1, type: 'sine', f0: 180, f1: 90, gain: 0.2, delay: 0.02 })
+  }
+
+  // nabrání vody vědrem: šplouch + bublavé stoupání
+  scoop() {
+    if (!this._ready()) return
+    this._noise({ dur: 0.3, filterType: 'lowpass', f0: 1200, f1: 300, gain: 0.5 })
+    const notes = [340, 460, 610, 780]
+    notes.forEach((f, i) => this._tone({ dur: 0.09, type: 'sine', f0: f, f1: f * 1.2, gain: 0.12, delay: 0.1 + i * 0.07 }))
+  }
+
+  // zalití sazenice: krátké lití vody
+  pour() {
+    if (!this._ready()) return
+    this._noise({ dur: 0.35, filterType: 'bandpass', f0: 900, f1: 500, gain: 0.4 })
+    this._tone({ dur: 0.12, type: 'sine', f0: 520, f1: 300, gain: 0.1, delay: 0.05 })
+  }
+
+  // stromek vyrostl: měkký vzestupný akord
+  grow() {
+    if (!this._ready()) return
+    const notes = [392, 493.9, 587.3] // G4 B4 D5
+    notes.forEach((f, i) => this._tone({ dur: 0.3, type: 'triangle', f0: f, gain: 0.16, delay: i * 0.05 }))
+  }
+
+  // přechod do fáze zalévání: dvoutónové oznámení
+  phase() {
+    if (!this._ready()) return
+    this._tone({ dur: 0.22, type: 'triangle', f0: 523.25, gain: 0.26 })
+    this._tone({ dur: 0.34, type: 'triangle', f0: 784, gain: 0.26, delay: 0.18 })
+  }
+
+  fanfare() {
+    if (!this._ready()) return
+    const notes = [523.25, 659.25, 783.99, 1046.5] // C5 E5 G5 C6
+    notes.forEach((f, i) => {
+      this._tone({ dur: 0.34, type: 'triangle', f0: f, gain: 0.3, delay: i * 0.13 })
+      this._tone({ dur: 0.34, type: 'sine', f0: f * 2, gain: 0.08, delay: i * 0.13 })
+    })
+    this._tone({ dur: 0.9, type: 'triangle', f0: 1046.5, gain: 0.22, delay: notes.length * 0.13 })
+  }
+}

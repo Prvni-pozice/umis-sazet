@@ -1,0 +1,19 @@
+{
+  "name": "umis-sazet",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "simplex-noise": "^4.0.3",
+    "three": "^0.166.1",
+    "nodemailer": "^6.9.14"
+  },
+  "devDependencies": {
+    "vite": "^5.4.11"
+  }
+}
