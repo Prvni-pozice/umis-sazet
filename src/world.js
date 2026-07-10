@@ -6,6 +6,8 @@ import { createNoise2D } from 'simplex-noise'
 export const SIZE = 256       // půdorys krajiny v blocích
 export const HEIGHT = 30      // max výška sloupce
 export const WATER_LEVEL = 4  // index bloku hladiny; vodní plocha ~y=4.3
+export const BASE_LEVEL = 6   // základní úroveň luk — okraj mapy navazuje na horizont
+export const PLOT_COUNT = 10  // počet záhonů (testovací; produkčně 25)
 
 // Block IDs
 const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, SAND = 4, WOOD = 5, LEAVES = 6
@@ -171,15 +173,18 @@ export class World {
     this.group = new THREE.Group()
     this.time = 0
 
-    this._generateTerrain()
-    this._carvePonds()     // 2 rybníky ve vnitrozemí (Vysočina!)
-    this._planFields()     // obilná pole (mozaika krajiny)
-    this._plantTrees()     // smrky + duby
-    this._planMeadow()     // vybere plochý 8×8 patch pro louku
-    this._placeSoilPlots() // 25 záhonů k sázení
+    this._generateTerrain()  // jen heightmapa (bloky až po vyhlazení)
+    this._carvePonds()       // 2 rybníky ve vnitrozemí (Vysočina!)
+    this._smoothTerrain()    // max převýšení 1 blok — všude se dá projít
+    this._fillBlocks()       // sloupce bloků z finální heightmapy
+    this._planFields()       // obilná pole (mozaika krajiny)
+    this._plantTrees()       // smrky + duby
+    this._planMeadow()       // vybere plochý 8×8 patch pro louku
+    this._placeSoilPlots()   // záhony k sázení (PLOT_COUNT)
     this._buildMesh()
     this._buildWater()
-    this._buildMeadow()    // květiny (InstancedMesh)
+    this._buildSurroundings() // nekonečný zelený horizont luk a polí
+    this._buildMeadow()      // květiny (InstancedMesh)
     this._buildClouds()
     this._buildFireflies()
 
@@ -235,36 +240,28 @@ export class World {
   }
 
   // ── generování ──
+  // Jen heightmapa — bloky se plní až v _fillBlocks (po rybnících a vyhlazení).
+  // Základ = BASE_LEVEL (úroveň okolních luk, okraj mapy na ni plynule klesá),
+  // kopce jen přidávají navrch. Žádné moře — voda vzniká jen kopáním rybníků.
   _generateTerrain() {
     const C = SIZE / 2
     for (let z = 0; z < SIZE; z++) {
       for (let x = 0; x < SIZE; x++) {
         const nx = (x - C) / C, nz = (z - C) / C
         const d = Math.sqrt(nx * nx + nz * nz)
-        const falloff = Math.max(0, 1 - d * d * 1.45)
-        // větší ostrov → nižší frekvence pro velké tvary + střední a jemný detail
+        const falloff = Math.max(0, 1 - d * d * 1.05) // kopce klesají k okraji mapy
         const base = this.noise2D(x * 0.013, z * 0.013) * 0.5 + 0.5
         const mid = this.noise2D(x * 0.045, z * 0.045) * 0.5 + 0.5
         const detail = this.noiseDetail(x * 0.14, z * 0.14) * 0.5 + 0.5
-        let h = Math.floor((base * 0.6 + mid * 0.27 + detail * 0.13) * 18 * falloff + 2)
-        h = Math.max(2, Math.min(HEIGHT - 8, h)) // min 2 = mořské dno, strop kvůli palmám
+        let h = Math.round(BASE_LEVEL + (base * 0.6 + mid * 0.27 + detail * 0.13) * 13 * falloff)
+        h = Math.max(BASE_LEVEL, Math.min(HEIGHT - 8, h))
         this.heightMap[z * SIZE + x] = h
-
-        for (let y = 0; y < h; y++) {
-          let id
-          if (y < h - 3) id = STONE
-          else if (y < h - 1) id = DIRT
-          else id = (h <= WATER_LEVEL + 1) ? SAND : GRASS
-          // pláž: horní vrstvy u vody z písku
-          if (h <= WATER_LEVEL + 2 && y >= h - 3) id = SAND
-          this.setBlock(x, y, z, id)
-        }
       }
     }
   }
 
-  // ── rybníky: 2 vykopané deprese pod hladinu (globální vodní plocha je
-  // zaplaví sama). Písčité dno + pozvolný břeh. ──
+  // ── rybníky: 2 mělké deprese pod hladinu (vodní plocha je zaplaví sama).
+  // Jen heightmapa — pozvolnost dorovná _smoothTerrain, bloky dá _fillBlocks. ──
   _carvePonds() {
     this.ponds = []
     for (let p = 0; p < 2; p++) {
@@ -273,32 +270,103 @@ export class World {
         const x = 30 + Math.floor(this.rng() * (SIZE - 60))
         const z = 30 + Math.floor(this.rng() * (SIZE - 60))
         const h = this.heightMap[z * SIZE + x]
-        if (h < WATER_LEVEL + 2 || h > WATER_LEVEL + 6) continue // rovinatější místa
+        if (h > BASE_LEVEL + 2) continue // rovinatější místa u základní úrovně
         if (this.ponds.some(q => Math.hypot(q.x - x, q.z - z) < 70)) continue
         spot = { x, z }; break
       }
       if (!spot) continue
-      const R = 7 + Math.floor(this.rng() * 4)
+      const R = 8 + Math.floor(this.rng() * 4)
       for (let dz = -R; dz <= R; dz++) {
         for (let dx = -R; dx <= R; dx++) {
           const x = spot.x + dx, z = spot.z + dz
           if (x < 2 || z < 2 || x >= SIZE - 2 || z >= SIZE - 2) continue
           const d = Math.hypot(dx, dz)
           if (d > R) continue
-          // miskovitý profil: střed 2 bloky pod hladinou, kraj = pláž na hladině
-          const target = d > R - 1.6
-            ? WATER_LEVEL + 1                               // úzký písčitý břeh
-            : Math.round(WATER_LEVEL - 1 - (1 - d / R) * 1.2)
+          // pozvolná mísa: střed 2 bloky pod hladinou → okraj pláž těsně nad ní
+          const target = Math.round(WATER_LEVEL - 2 + (d / R) * 3)
           const cur = this.heightMap[z * SIZE + x]
-          if (target >= cur) continue
-          for (let y = target; y < cur; y++) this.setBlock(x, y, z, AIR)
-          // dno/břeh z písku
-          for (let y = Math.max(0, target - 2); y < target; y++) this.setBlock(x, y, z, SAND)
-          this.heightMap[z * SIZE + x] = target
+          if (target < cur) this.heightMap[z * SIZE + x] = target
         }
       }
       this.ponds.push({ x: spot.x, z: spot.z, r: R })
     }
+  }
+
+  // ── vyhlazení: mezi sousedními sloupci max 1 blok převýšení ──
+  // Garantuje, že se VŠUDE dá projít/vyskákat (skok hráče zvládá 1 blok) —
+  // žádné díry ani stěny, ze kterých se nejde dostat.
+  _smoothTerrain() {
+    const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+    let changed = true
+    while (changed) {
+      changed = false
+      for (let z = 0; z < SIZE; z++) {
+        for (let x = 0; x < SIZE; x++) {
+          const i = z * SIZE + x
+          for (const [dx, dz] of N4) {
+            const nx = x + dx, nz = z + dz
+            if (nx < 0 || nz < 0 || nx >= SIZE || nz >= SIZE) continue
+            const nh = this.heightMap[nz * SIZE + nx]
+            if (this.heightMap[i] > nh + 1) {
+              this.heightMap[i] = nh + 1
+              changed = true
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ── bloky z finální heightmapy: kámen → hlína → tráva (u vody písek) ──
+  _fillBlocks() {
+    for (let z = 0; z < SIZE; z++) {
+      for (let x = 0; x < SIZE; x++) {
+        const h = this.heightMap[z * SIZE + x]
+        const sandy = h <= WATER_LEVEL + 1 // dno a břehy rybníků
+        for (let y = 0; y < h; y++) {
+          let id
+          if (y < h - 3) id = STONE
+          else if (y < h - 1) id = DIRT
+          else id = sandy ? SAND : GRASS
+          if (sandy && y >= h - 2) id = SAND
+          this.setBlock(x, y, z, id)
+        }
+      }
+    }
+  }
+
+  // ── nekonečný horizont: rovina luk a polí kolem mapy (Vysočina) ──
+  _buildSurroundings() {
+    const c = document.createElement('canvas')
+    c.width = c.height = 512
+    const ctx = c.getContext('2d')
+    ctx.fillStyle = '#69b34a' // základní louka (ladí s trávou terénu)
+    ctx.fillRect(0, 0, 512, 512)
+    // patchwork polí a luk
+    const palette = ['#5da844', '#7cc257', '#8fb944', '#d4b456', '#639e3e', '#a4c860', '#c2a94e']
+    for (let i = 0; i < 90; i++) {
+      ctx.fillStyle = palette[(this.rng() * palette.length) | 0]
+      ctx.globalAlpha = 0.5 + this.rng() * 0.5
+      ctx.fillRect(this.rng() * 512, this.rng() * 512, 20 + this.rng() * 90, 14 + this.rng() * 70)
+    }
+    ctx.globalAlpha = 1
+    // tmavé remízky a pásy lesa
+    for (let i = 0; i < 26; i++) {
+      ctx.fillStyle = 'rgba(38, 84, 40, 0.8)'
+      ctx.fillRect(this.rng() * 512, this.rng() * 512, 30 + this.rng() * 80, 4 + this.rng() * 7)
+    }
+    const tex = new THREE.CanvasTexture(c)
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+    tex.repeat.set(14, 14)
+    tex.anisotropy = 4
+    const geo = new THREE.PlaneGeometry(4000, 4000)
+    geo.rotateX(-Math.PI / 2)
+    const mat = new THREE.MeshLambertMaterial({ map: tex })
+    this.surroundings = new THREE.Mesh(geo, mat)
+    // těsně pod okrajovou úroveň terénu (BASE_LEVEL) — plynulá návaznost
+    this.surroundings.position.set(SIZE / 2, BASE_LEVEL - 0.02, SIZE / 2)
+    this.group.add(this.surroundings)
   }
 
   // ── obilná pole: 2–3 obdélníkové patche na rovinách (mozaika Vysočiny) ──
@@ -392,11 +460,10 @@ export class World {
     }
   }
 
-  // ── 25 záhonů (SOIL) k sázení: náhodně po krajině, min. rozestup ──
+  // ── záhony (SOIL) k sázení: náhodně po krajině, min. rozestup ──
   _placeSoilPlots() {
     this.soilPlots = [] // {x, z, y} — y = pochozí výška (vršek záhonu)
-    const NEED = 25
-    for (let i = 0; i < 20000 && this.soilPlots.length < NEED; i++) {
+    for (let i = 0; i < 20000 && this.soilPlots.length < PLOT_COUNT; i++) {
       const x = 8 + Math.floor(this.rng() * (SIZE - 16))
       const z = 8 + Math.floor(this.rng() * (SIZE - 16))
       const h = this.heightMap[z * SIZE + x]
@@ -404,7 +471,7 @@ export class World {
       if (this.getBlock(x, h - 1, z) !== GRASS) continue      // ne pole/písek/strom
       if (this.getBlock(x, h, z) !== AIR) continue            // nic nad tím
       if (this.meadow && this.inMeadow(x, z)) continue
-      if (this.soilPlots.some(s => Math.hypot(s.x - x, s.z - z) < 14)) continue
+      if (this.soilPlots.some(s => Math.hypot(s.x - x, s.z - z) < 20)) continue
       this.setBlock(x, h - 1, z, SOIL) // vrchní blok = ornice (pochozí, v úrovni)
       this.soilPlots.push({ x, z, y: h })
     }
@@ -556,8 +623,9 @@ export class World {
     heightTex.minFilter = THREE.LinearFilter
     heightTex.needsUpdate = true
 
+    // jen přes mapu — voda je pouze v rybnících (okolí kryje zelený horizont)
     const waterY = WATER_LEVEL + 0.3
-    const geo = new THREE.PlaneGeometry(1600, 1600, 128, 128)
+    const geo = new THREE.PlaneGeometry(SIZE, SIZE, 96, 96)
     geo.rotateX(-Math.PI / 2)
 
     this.waterUniforms = {

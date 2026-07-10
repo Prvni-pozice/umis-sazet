@@ -1,5 +1,5 @@
 // main.js — orchestrace: renderer, osvětlení, obloha, post-processing, game loop.
-// Hra „Umíš sázet?": fáze 1 = zasadit 25 sazenic (průchod záhonem),
+// Hra „Umíš sázet?": fáze 1 = zasadit PLOT_COUNT sazenic (průchod záhonem),
 // fáze 2 = zalít je (vědro na 5 dílků, doplňování u vody). Dva časy.
 import * as THREE from 'three'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
@@ -19,7 +19,6 @@ import { QualityManager } from './quality.js'
 import { AudioFX } from './audio.js'
 
 const WATER_CAP = 5      // dílků vody ve vědru
-const TOTAL_PLOTS = 25
 
 function mulberry32(seed) {
   let a = seed >>> 0
@@ -231,6 +230,8 @@ class Game {
 
     this.animals = new Animals(this.scene, this.world, mulberry32(seed ^ 0xabcdef), this.player.pos)
     this.planting = new Planting(this.scene, this.world)
+    this.totalPlots = this.planting.plots.length // = PLOT_COUNT (kolik se vešlo)
+    this.ui.setPlotCount(this.totalPlots)
     this.hand = new Hand(this.camera)
     this.hand.setItem(null) // v menu bez ruky
     this.water = 0
@@ -258,7 +259,7 @@ class Game {
     this.hand.setItem('sapling')
     this.controls.enabled = true
     this.controls.lock()
-    this.ui.showPlaying(this.touch, TOTAL_PLOTS)
+    this.ui.showPlaying(this.touch, this.totalPlots)
   }
 
   _enterWatering() {
@@ -321,8 +322,8 @@ class Game {
           this.audio.plant()
           this.hand.playPlant()
           this.particles.confetti(plot.pos.clone().add(new THREE.Vector3(0, 0.6, 0)))
-          this.ui.setPlanted(this.planting.plantedCount, TOTAL_PLOTS)
-          if (this.planting.plantedCount >= TOTAL_PLOTS) this._enterWatering()
+          this.ui.setPlanted(this.planting.plantedCount, this.totalPlots)
+          if (this.planting.plantedCount >= this.totalPlots) this._enterWatering()
         }
       } else if (this.state === 'watering') {
         // doplnění vody dotykem vodní plochy
@@ -344,8 +345,8 @@ class Game {
             this.hand.setBucketFill(this.water / WATER_CAP)
             this.particles.splash(plot.pos.clone().add(new THREE.Vector3(0, 0.8, 0)))
             setTimeout(() => this.audio.grow(), 350) // stromek „vystřelí"
-            this.ui.setWatered(this.planting.wateredCount, TOTAL_PLOTS, this.water)
-            if (this.planting.wateredCount >= TOTAL_PLOTS) this._win()
+            this.ui.setWatered(this.planting.wateredCount, this.totalPlots, this.water)
+            if (this.planting.wateredCount >= this.totalPlots) this._win()
           }
         }
         this.ui.setNeedWater(this.water === 0)

@@ -237,17 +237,17 @@
 <body>
   <div id="start-screen" class="overlay">
     <h1>Umíš sázet? 🌱</h1>
-    <div class="subtitle">Zasaď 25 dubů na Vysočině a zalij je — co nejrychleji!</div>
+    <div class="subtitle">Zasaď <span class="plot-n">…</span> doubků na Vysočině a zalij je — co nejrychleji!</div>
     <div class="instructions" id="instructions-desktop">
       <b>WASD</b> – pohyb &nbsp;·&nbsp; <b>myš</b> – rozhled &nbsp;·&nbsp; <b>mezerník</b> – skok<br>
-      <b>1. fáze:</b> projdi všech 25 hnědých záhonů — každým průchodem zasadíš sazeničku.<br>
-      <b>2. fáze:</b> naber vodu u rybníka (vejde se 5 dílků) a zalij všech 25 sazenic. Zalitý stromek vyroste!<br>
+      <b>1. fáze:</b> projdi všech <span class="plot-n">…</span> hnědých záhonů — každým průchodem zasadíš sazeničku.<br>
+      <b>2. fáze:</b> naber vodu u rybníka (vejde se 5 dílků) a zalij všechny sazenice. Zalitý stromek vyroste!<br>
       <span class="tip">🌱 Měří se čas obou fází zvlášť — na žebříček jde součet. Cestou potkáš srnky, zajíce i ježky.</span>
     </div>
     <div class="instructions" id="instructions-mobile" style="display:none">
       <b>Levý palec</b> – pohyb (joystick) &nbsp;·&nbsp; <b>pravý palec</b> – rozhled &nbsp;·&nbsp; <b>tlačítko</b> – skok<br>
-      <b>1. fáze:</b> projdi 25 hnědých záhonů = zasadíš sazeničky.<br>
-      <b>2. fáze:</b> naber vodu u rybníka (5 dílků) a zalij všech 25 sazenic.<br>
+      <b>1. fáze:</b> projdi <span class="plot-n">…</span> hnědých záhonů = zasadíš sazeničky.<br>
+      <b>2. fáze:</b> naber vodu u rybníka (5 dílků) a zalij všechny sazenice.<br>
       <span class="tip">🌱 Na žebříček jde součet časů obou fází.</span>
     </div>
     <button id="start-btn">▶&nbsp; Hrát</button>
@@ -321,7 +321,7 @@
   </div>
 
   <div id="hud">
-    <div class="pill"><small id="hud-phase">🌱</small><span id="hud-count">0/25</span></div>
+    <div class="pill"><small id="hud-phase">🌱</small><span id="hud-count">0/0</span></div>
     <div class="pill"><small>ČAS</small><span id="hud-time">0:00.0</span></div>
     <div class="pill"><small>REKORD</small><span id="hud-best">—</span></div>
     <button class="pill" id="mute-btn" style="pointer-events: auto; cursor: pointer;">🔊</button>

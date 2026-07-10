@@ -71,9 +71,16 @@ export class UI {
     }
     this.nameInput.value = getSavedName()
     this.emailInput.value = getSavedEmail()
+    this.totalPlots = 0
 
     this._refreshBestLabels()
     this.refreshBoards()
+  }
+
+  /** Propíše počet záhonů do textů na start screenu (.plot-n) */
+  setPlotCount(n) {
+    this.totalPlots = n
+    for (const el of document.querySelectorAll('.plot-n')) el.textContent = n
   }
 
   // ── kvíz před startem kola (jen edukativní) ──
@@ -309,7 +316,7 @@ export class UI {
   // přechod do fáze zalévání
   showWateringPhase(plantMs, waterCap) {
     this.hudPhase.textContent = '💧'
-    this.hudCount.textContent = `0/25`
+    this.hudCount.textContent = `0/${this.totalPlots}`
     this.waterGauge.classList.add('visible')
     this.setWater(0, waterCap)
     this.phaseFlash.textContent = `🌱 Vysazeno za ${formatTime(plantMs)} — teď zalévej!`

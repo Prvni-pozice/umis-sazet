@@ -1,7 +1,7 @@
 // player.js — first-person hráč: AABB kolize s voxely, gravitace, skok, voda.
 // Žádná fyzikální knihovna — osově oddělený pohyb + clamp na hrany bloků.
 import * as THREE from 'three'
-import { WATER_LEVEL } from './world.js'
+import { SIZE, WATER_LEVEL } from './world.js'
 
 const GRAVITY = 24
 const JUMP_SPEED = 8.6
@@ -82,7 +82,11 @@ export class Player {
     this.onGround = false
     this._moveAxis('y', this.vel.y * dt)
 
-    // spadl z ostrova do hloubky → respawn na spawn point
+    // neviditelná stěna na okraji mapy — za ní je jen vizuální horizont
+    this.pos.x = Math.min(Math.max(this.pos.x, 1.2), SIZE - 1.2)
+    this.pos.z = Math.min(Math.max(this.pos.z, 1.2), SIZE - 1.2)
+
+    // pojistka: propad mimo terén → respawn na spawn point
     if (this.pos.y < -12) {
       this.pos.copy(this.spawnPoint)
       this.vel.set(0, 0, 0)
