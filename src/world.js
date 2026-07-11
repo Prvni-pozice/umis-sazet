@@ -7,7 +7,9 @@ export const SIZE = 256       // půdorys krajiny v blocích
 export const HEIGHT = 30      // max výška sloupce
 export const WATER_LEVEL = 4  // index bloku hladiny; vodní plocha ~y=4.3
 export const BASE_LEVEL = 6   // základní úroveň luk — okraj mapy navazuje na horizont
-export const PLOT_COUNT = 10  // počet záhonů (testovací; produkčně 25)
+export const PLOT_COUNT = 15  // počet záhonů (5 řad po 3)
+const PLOT_ROW_LEN = 3        // záhonů v jedné řadě
+const PLOT_ROW_STEP = 3       // rozestup mezi záhony v řadě (2 kostky mezera + 1 záhon)
 
 // Block IDs
 const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, SAND = 4, WOOD = 5, LEAVES = 6
@@ -473,20 +475,37 @@ export class World {
     }
   }
 
-  // ── záhony (SOIL) k sázení: náhodně po krajině, min. rozestup ──
+  // ── záhony (SOIL) k sázení: řady po PLOT_ROW_LEN, rozestup PLOT_ROW_STEP v řadě ──
   _placeSoilPlots() {
     this.soilPlots = [] // {x, z, y} — y = pochozí výška (vršek záhonu)
-    for (let i = 0; i < 20000 && this.soilPlots.length < PLOT_COUNT; i++) {
-      const x = 8 + Math.floor(this.rng() * (SIZE - 16))
-      const z = 8 + Math.floor(this.rng() * (SIZE - 16))
-      const h = this.heightMap[z * SIZE + x]
-      if (h < WATER_LEVEL + 2) continue
-      if (this.getBlock(x, h - 1, z) !== GRASS) continue      // ne pole/písek/strom
-      if (this.getBlock(x, h, z) !== AIR) continue            // nic nad tím
-      if (this.meadow && this.inMeadow(x, z)) continue
-      if (this.soilPlots.some(s => Math.hypot(s.x - x, s.z - z) < 20)) continue
-      this.setBlock(x, h - 1, z, SOIL) // vrchní blok = ornice (pochozí, v úrovni)
-      this.soilPlots.push({ x, z, y: h })
+    const rows = Math.ceil(PLOT_COUNT / PLOT_ROW_LEN)
+    for (let r = 0; r < rows && this.soilPlots.length < PLOT_COUNT; r++) {
+      for (let attempt = 0; attempt < 4000; attempt++) {
+        const horizontal = this.rng() < 0.5 // orientace řady: podél X, nebo podél Z
+        const x0 = 8 + Math.floor(this.rng() * (SIZE - 16))
+        const z0 = 8 + Math.floor(this.rng() * (SIZE - 16))
+        const cells = []
+        let ok = true
+        for (let i = 0; i < PLOT_ROW_LEN; i++) {
+          const x = horizontal ? x0 + i * PLOT_ROW_STEP : x0
+          const z = horizontal ? z0 : z0 + i * PLOT_ROW_STEP
+          if (x < 4 || x >= SIZE - 4 || z < 4 || z >= SIZE - 4) { ok = false; break }
+          const h = this.heightMap[z * SIZE + x]
+          if (h < WATER_LEVEL + 2) { ok = false; break }
+          if (this.getBlock(x, h - 1, z) !== GRASS) { ok = false; break } // ne pole/písek/strom
+          if (this.getBlock(x, h, z) !== AIR) { ok = false; break }       // nic nad tím
+          if (this.meadow && this.inMeadow(x, z)) { ok = false; break }
+          cells.push({ x, z, h })
+        }
+        if (!ok) continue
+        // celá řada musí mít odstup od už umístěných záhonů (jiných řad)
+        if (this.soilPlots.some(s => cells.some(c => Math.hypot(s.x - c.x, s.z - c.z) < 14))) continue
+        for (const c of cells) {
+          this.setBlock(c.x, c.h - 1, c.z, SOIL) // vrchní blok = ornice (pochozí, v úrovni)
+          this.soilPlots.push({ x: c.x, z: c.z, y: c.h })
+        }
+        break
+      }
     }
   }
 
