@@ -10,6 +10,7 @@ export const BASE_LEVEL = 6   // základní úroveň luk — okraj mapy navazuje
 export const PLOT_COUNT = 15  // počet záhonů (5 řad po 3)
 const PLOT_ROW_LEN = 3        // záhonů v jedné řadě
 const PLOT_ROW_STEP = 3       // rozestup mezi záhony v řadě (2 kostky mezera + 1 záhon)
+const MAX_PLOT_SPREAD = 50    // max vzájemná vzdálenost míst k výsadbě (blok = metr)
 
 // Block IDs
 const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, SAND = 4, WOOD = 5, LEAVES = 6
@@ -227,6 +228,19 @@ export class World {
     const bx = Math.floor(x), bz = Math.floor(z)
     if (bx < 0 || bz < 0 || bx >= SIZE || bz >= SIZE) return 0
     return this.heightMap[bz * SIZE + bx]
+  }
+
+  // Stojí hráč na/vedle dlaždice s vodou? (vodní sloupec = terén pod hladinou)
+  // Umožní nabrat vodu už vstoupením na okraj plochy, bez ponoření.
+  nearWater(x, z, r = 1.1) {
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const cx = Math.floor(x + dx * r), cz = Math.floor(z + dz * r)
+        if (cx < 0 || cz < 0 || cx >= SIZE || cz >= SIZE) continue
+        if (this.heightMap[cz * SIZE + cx] <= WATER_LEVEL) return true
+      }
+    }
+    return false
   }
 
   randomLandPosition(minAbove = 1, tries = 400) {
@@ -500,6 +514,12 @@ export class World {
         if (!ok) continue
         // celá řada musí mít odstup od už umístěných záhonů (jiných řad)
         if (this.soilPlots.some(s => cells.some(c => Math.hypot(s.x - c.x, s.z - c.z) < 14))) continue
+        // ...a zároveň zůstat v klastru: každé místo do MAX_PLOT_SPREAD/2 od kotvy
+        // (1. záhon) → vzájemná vzdálenost libovolných dvou míst ≤ MAX_PLOT_SPREAD
+        if (this.soilPlots.length) {
+          const a = this.soilPlots[0]
+          if (cells.some(c => Math.hypot(a.x - c.x, a.z - c.z) > MAX_PLOT_SPREAD / 2)) continue
+        }
         for (const c of cells) {
           this.setBlock(c.x, c.h - 1, c.z, SOIL) // vrchní blok = ornice (pochozí, v úrovni)
           this.soilPlots.push({ x: c.x, z: c.z, y: c.h })
@@ -663,8 +683,8 @@ export class World {
     this.waterUniforms = {
       uTime: { value: 0 },
       uSunDir: { value: new THREE.Vector3(0.4, 0.8, 0.3).normalize() },
-      uDeep: { value: new THREE.Color(0x0d4436) },     // rybniční tmavá zelenomodrá
-      uShallow: { value: new THREE.Color(0x3fae8c) },  // mělčina do tyrkysova
+      uDeep: { value: new THREE.Color(0x103f63) },     // rybniční tmavá modř
+      uShallow: { value: new THREE.Color(0x3fa2cf) },  // mělčina do modrého tyrkysu
       uSky: { value: new THREE.Color(0xaed9f2) },
       uHeightTex: { value: heightTex },
       uIslandSize: { value: SIZE },

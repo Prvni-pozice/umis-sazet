@@ -8,6 +8,7 @@ const JUMP_SPEED = 8.6
 const WALK_SPEED = 5.6
 const AIR_CONTROL = 0.55
 const WATER_SPEED = 2.6
+const WATER_JUMP = 7.5   // impulz na jeden stisk skoku ve vodě = vyskočit o kostku výš
 
 export class Player {
   constructor(world) {
@@ -64,10 +65,16 @@ export class Player {
     this.vel.x += (targetVx - this.vel.x) * lerp
     this.vel.z += (targetVz - this.vel.z) * lerp
 
+    const jumpPressed = jump && !this._jumpWasHeld
     if (this.inWater) {
       this.vel.y -= GRAVITY * 0.25 * dt
       this.vel.y = Math.max(this.vel.y, -2.2)
-      if (jump) this.vel.y = Math.min(this.vel.y + 22 * dt, 3.2) // pádlování nahoru
+      if (jumpPressed) {
+        this.vel.y = WATER_JUMP        // jeden stisk = vyskočit o kostku výš / k hladině
+        this.justJumped = true
+      } else if (jump) {
+        this.vel.y = Math.min(this.vel.y + 22 * dt, 3.2) // držení = plavání nahoru
+      }
     } else {
       this.vel.y -= GRAVITY * dt
       if (jump && this.onGround) {
@@ -76,6 +83,7 @@ export class Player {
         this.justJumped = true // přečte a smaže main (zvuk)
       }
     }
+    this._jumpWasHeld = jump
 
     this._moveAxis('x', this.vel.x * dt)
     this._moveAxis('z', this.vel.z * dt)

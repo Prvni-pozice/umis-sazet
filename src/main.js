@@ -326,8 +326,9 @@ class Game {
           if (this.planting.plantedCount >= this.totalPlots) this._enterWatering()
         }
       } else if (this.state === 'watering') {
-        // doplnění vody dotykem vodní plochy
-        if (this.player.inWater && this.water < WATER_CAP) {
+        // doplnění vody vstupem na libovolnou dlaždici s vodou (i bez ponoření)
+        if (this.water < WATER_CAP &&
+            (this.player.inWater || this.world.nearWater(this.player.pos.x, this.player.pos.z))) {
           this.water = WATER_CAP
           this.audio.scoop()
           this.hand.playScoop()
@@ -345,7 +346,8 @@ class Game {
             this.hand.setBucketFill(this.water / WATER_CAP)
             this.particles.splash(plot.pos.clone().add(new THREE.Vector3(0, 0.8, 0)))
             setTimeout(() => this.audio.grow(), 350) // stromek „vystřelí"
-            this.ui.setWatered(this.planting.wateredCount, this.totalPlots, this.water)
+            this.ui.setWatered(this.planting.wateredCount, this.totalPlots)
+            this.ui.setWater(this.water, WATER_CAP) // ubývání kapek vpravo při zalití
             if (this.planting.wateredCount >= this.totalPlots) this._win()
           }
         }
