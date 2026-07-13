@@ -683,9 +683,9 @@ export class World {
     this.waterUniforms = {
       uTime: { value: 0 },
       uSunDir: { value: new THREE.Vector3(0.4, 0.8, 0.3).normalize() },
-      uDeep: { value: new THREE.Color(0x103f63) },     // rybniční tmavá modř
-      uShallow: { value: new THREE.Color(0x3fa2cf) },  // mělčina do modrého tyrkysu
-      uSky: { value: new THREE.Color(0xaed9f2) },
+      uDeep: { value: new THREE.Color(0x1f7ad4) },     // rybniční sytá modř
+      uShallow: { value: new THREE.Color(0x6fd0f0) },  // mělčina jasný modrý tyrkys
+      uSky: { value: new THREE.Color(0xbfe3ff) },
       uHeightTex: { value: heightTex },
       uIslandSize: { value: SIZE },
       uMaxH: { value: HEIGHT },
@@ -744,7 +744,7 @@ export class World {
           vec3 viewDir = normalize(cameraPosition - vWorldPos);
           vec3 nrm = normalize(vNormal);
           float fres = pow(1.0 - max(dot(viewDir, nrm), 0.0), 3.0);
-          vec3 col = mix(base, uSky, clamp(fres * 0.75 + 0.12, 0.0, 1.0));
+          vec3 col = mix(base, uSky, clamp(fres * 0.8 + 0.22, 0.0, 1.0));
 
           // sluneční odlesk (chytá ho bloom)
           vec3 refl = reflect(-uSunDir, nrm);
