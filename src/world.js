@@ -757,7 +757,8 @@ export class World {
           float foam = foamBand * smoothstep(0.42, 0.75, foamN) * inside;
           col = mix(col, vec3(1.0), foam * 0.85);
 
-          float alpha = mix(0.93, 0.62, shallow);
+          // vysoká neprůhlednost → zvenku dominuje modř hladiny, ne hnědé dno
+          float alpha = mix(0.985, 0.86, shallow);
           alpha = max(alpha, foam);
 
           // fog do dálky (ShaderMaterial scene.fog nevidí)
