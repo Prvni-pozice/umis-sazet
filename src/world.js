@@ -387,9 +387,17 @@ export class World {
     const tex = new THREE.CanvasTexture(c)
     tex.colorSpace = THREE.SRGBColorSpace
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-    tex.repeat.set(14, 14)
+    tex.repeat.set(14 / 4000, 14 / 4000) // ShapeGeometry má UV v souřadnicích tvaru
     tex.anisotropy = 4
-    const geo = new THREE.PlaneGeometry(4000, 4000)
+    // prstenec s dírou přes celou mapu — plát nesmí překrývat rybníky ani břehy
+    const shape = new THREE.Shape()
+    shape.moveTo(-2000, -2000); shape.lineTo(2000, -2000)
+    shape.lineTo(2000, 2000); shape.lineTo(-2000, 2000); shape.closePath()
+    const hole = new THREE.Path()
+    hole.moveTo(-SIZE / 2, -SIZE / 2); hole.lineTo(SIZE / 2, -SIZE / 2)
+    hole.lineTo(SIZE / 2, SIZE / 2); hole.lineTo(-SIZE / 2, SIZE / 2); hole.closePath()
+    shape.holes.push(hole)
+    const geo = new THREE.ShapeGeometry(shape)
     geo.rotateX(-Math.PI / 2)
     const mat = new THREE.MeshLambertMaterial({ map: tex })
     this.surroundings = new THREE.Mesh(geo, mat)
