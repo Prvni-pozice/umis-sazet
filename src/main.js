@@ -30,6 +30,19 @@ function mulberry32(seed) {
   }
 }
 
+// Vertikální FOV pro daný poměr stran. Na 16:9 a širším drží 72° svisle;
+// na užším (mobil na výšku) svislé FOV zvětšuje, aby vodorovný výřez nebyl
+// jen úzký proužek — s limitem, ať nevznikne rybí oko.
+const BASE_FOV = 72
+const REF_ASPECT = 16 / 9
+const MAX_FOV = 90
+function fovForAspect(aspect) {
+  if (aspect >= REF_ASPECT) return BASE_FOV
+  const tanHalfH = Math.tan((BASE_FOV * Math.PI) / 360) * REF_ASPECT // cíl: stejné vodorovné FOV
+  const fov = (2 * Math.atan(tanHalfH / aspect) * 180) / Math.PI
+  return Math.min(MAX_FOV, fov)
+}
+
 class Game {
   constructor() {
     this.touch = isTouchDevice()
@@ -73,6 +86,9 @@ class Game {
       },
     })
 
+    this.controls.onModeChange = mode => this.ui.setInputMode(mode)
+    this.ui.setInputMode(this.controls.mode)
+
     this._buildRound()
 
     window.addEventListener('resize', () => this._onResize())
@@ -94,7 +110,7 @@ class Game {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     document.body.appendChild(this.renderer.domElement)
 
-    this.camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 2500)
+    this.camera = new THREE.PerspectiveCamera(fovForAspect(window.innerWidth / window.innerHeight), window.innerWidth / window.innerHeight, 0.1, 2500)
   }
 
   _setupSceneBase() {
@@ -259,7 +275,7 @@ class Game {
     this.hand.setItem('sapling')
     this.controls.enabled = true
     this.controls.lock()
-    this.ui.showPlaying(this.touch, this.totalPlots)
+    this.ui.showPlaying(this.controls.touch, this.totalPlots)
   }
 
   _enterWatering() {
@@ -448,7 +464,9 @@ class Game {
   _onResize() {
     const w = window.innerWidth, h = window.innerHeight
     this.camera.aspect = w / h
+    this.camera.fov = fovForAspect(this.camera.aspect)
     this.camera.updateProjectionMatrix()
+    if (this.hand) this.hand.layout()
     this.renderer.setSize(w, h)
     this.composer.setSize(w, h)
   }

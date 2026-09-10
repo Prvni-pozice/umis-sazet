@@ -8,12 +8,15 @@ export class Hand {
   constructor(camera) {
     this.camera = camera
     this.group = new THREE.Group()
-    // pravý dolní roh zorného pole
-    this.basePos = new THREE.Vector3(0.42, -0.38, -0.75)
+    // Pravý dolní roh zorného pole. Pozice se počítá jako podíl frusta v dané
+    // hloubce, aby ruka nevypadla ze záběru na úzkém (mobilním) poměru stran.
+    this.handZ = -0.75
+    this.basePos = new THREE.Vector3(0.42, -0.38, this.handZ)
     this.baseRot = new THREE.Euler(-0.25, -0.35, 0.12)
+    camera.add(this.group)
+    this.layout()
     this.group.position.copy(this.basePos)
     this.group.rotation.copy(this.baseRot)
-    camera.add(this.group)
 
     // předloktí (rukáv) + dlaň — bez stínů, renderují se blízko kamery
     const sleeveMat = new THREE.MeshLambertMaterial({ color: 0x3e7d3a }) // zelený rukáv (zahradník)
@@ -57,6 +60,19 @@ export class Hand {
     this.item = 'sapling'
     this.anim = null   // { type, t, dur, onDone }
     this.bobT = 0
+  }
+
+  /**
+   * Přepočte pozici ruky podle aktuálního FOV a poměru stran kamery.
+   * Podíly odpovídají původnímu desktopovému umístění (16:9, FOV 72).
+   */
+  layout() {
+    const halfH = Math.tan((this.camera.fov * Math.PI) / 360) * Math.abs(this.handZ)
+    const halfW = halfH * this.camera.aspect
+    this.basePos.set(halfW * 0.43, -halfH * 0.70, this.handZ)
+    // na úzkém displeji je frustum menší — zmenšit i ruku, ať nezabere půl obrazovky
+    const s = Math.max(0.55, Math.min(1, halfW / 0.97))
+    this.group.scale.setScalar(s)
   }
 
   /** 'sapling' | 'bucket' | null */

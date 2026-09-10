@@ -1,28 +1,52 @@
 // controls.js — desktop (Pointer Lock + WASD) i mobil (joystick + drag look).
+// Obě sady vstupů jsou registrované vždy: notebooky s dotykovým displejem
+// hlásí maxTouchPoints > 0, ale ovládají se myší a klávesnicí. Režim (jaké UI
+// ukázat) se odhadne z média a přepne se podle prvního skutečného vstupu.
+
+/** Odhad: dotykové zařízení = hrubý primární ukazatel (prst), ne jen přítomnost touch API. */
 export function isTouchDevice() {
-  return 'ontouchstart' in window || navigator.maxTouchPoints > 0
+  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+  const coarse = window.matchMedia ? window.matchMedia('(pointer: coarse)').matches : false
+  return hasTouch && coarse
 }
 
 export class Controls {
   constructor(canvas) {
     this.canvas = canvas
-    this.touch = isTouchDevice()
+    this.mode = isTouchDevice() ? 'touch' : 'desktop'
+    this.touch = this.mode === 'touch' // zpětná kompatibilita
     this.yaw = 0
     this.pitch = -0.1
     this.keys = new Set()
     this.jumpHeld = false
     this.enabled = false
     this.onLockLost = null
+    this.onModeChange = null
 
-    if (this.touch) this._setupTouch()
-    else this._setupDesktop()
+    this._setupDesktop()
+    this._setupTouch()
+  }
+
+  _setMode(mode) {
+    if (this.mode === mode) return
+    this.mode = mode
+    this.touch = mode === 'touch'
+    if (this.onModeChange) this.onModeChange(mode)
+  }
+
+  _addLook(dx, dy, sens) {
+    this.yaw -= dx * sens
+    this.pitch -= dy * sens
+    this.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, this.pitch))
   }
 
   // ── Desktop ──
   _setupDesktop() {
+    const MOVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
     document.addEventListener('keydown', e => {
-      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+      if (MOVE_KEYS.includes(e.code)) {
         e.preventDefault()
+        this._setMode('desktop')
       }
       this.keys.add(e.code)
       if (e.code === 'Space') this.jumpHeld = true
@@ -31,36 +55,52 @@ export class Controls {
       this.keys.delete(e.code)
       if (e.code === 'Space') this.jumpHeld = false
     })
+
+    // Rozhled: primárně Pointer Lock. Když ho prohlížeč nepovolí (iframe bez
+    // allow="pointer-lock", zamítnuté gesto), funguje tažení se stisknutým
+    // tlačítkem, ať hráč nezůstane bez rozhledu.
+    this.dragging = false
+    this.dragLast = { x: 0, y: 0 }
+    this.canvas.addEventListener('mousedown', e => {
+      if (!this.enabled || this.mode !== 'desktop') return
+      if (document.pointerLockElement === this.canvas) return
+      this.dragging = true
+      this.dragLast = { x: e.clientX, y: e.clientY }
+      this.lock() // pokus o znovuzamčení
+    })
+    document.addEventListener('mouseup', () => { this.dragging = false })
     document.addEventListener('mousemove', e => {
-      if (document.pointerLockElement !== this.canvas) return
-      this.yaw -= e.movementX * 0.0024
-      this.pitch -= e.movementY * 0.0024
-      this.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, this.pitch))
+      if (document.pointerLockElement === this.canvas) {
+        this._addLook(e.movementX, e.movementY, 0.0024)
+      } else if (this.dragging && this.enabled) {
+        this._addLook(e.clientX - this.dragLast.x, e.clientY - this.dragLast.y, 0.0035)
+        this.dragLast = { x: e.clientX, y: e.clientY }
+      }
     })
     document.addEventListener('pointerlockchange', () => {
-      if (document.pointerLockElement !== this.canvas && this.enabled && this.onLockLost) {
+      if (document.pointerLockElement !== this.canvas && this.enabled && this.mode === 'desktop' && this.onLockLost) {
         this.onLockLost()
       }
     })
   }
 
   lock() {
-    if (!this.touch && this.canvas.requestPointerLock) {
-      // iOS Safari na desktopu vrací promise, chyby ignorujeme (uživatel dá Esc)
+    if (this.mode !== 'desktop' || !this.canvas.requestPointerLock) return
+    // Zamítnutí ignorujeme (Safari/iframe hází i synchronně) — rozhled pak
+    // obslouží tažení myší.
+    try {
       const p = this.canvas.requestPointerLock()
       if (p && p.catch) p.catch(() => {})
-    }
+    } catch { /* pointer lock není k dispozici */ }
   }
 
   unlock() {
-    if (!this.touch && document.exitPointerLock && document.pointerLockElement) {
-      document.exitPointerLock()
-    }
+    this.dragging = false
+    if (document.exitPointerLock && document.pointerLockElement) document.exitPointerLock()
   }
 
   // ── Mobil ──
   _setupTouch() {
-    this.joyActive = false
     this.joyId = null
     this.joyOrigin = { x: 0, y: 0 }
     this.joyVec = { x: 0, y: 0 }
@@ -71,12 +111,20 @@ export class Controls {
     this.joyKnob = document.getElementById('joystick-knob')
     const jumpBtn = document.getElementById('jump-btn')
 
-    jumpBtn.addEventListener('touchstart', e => { e.preventDefault(); this.jumpHeld = true }, { passive: false })
-    jumpBtn.addEventListener('touchend', e => { e.preventDefault(); this.jumpHeld = false }, { passive: false })
-    jumpBtn.addEventListener('touchcancel', () => { this.jumpHeld = false })
+    // pointer* pokrývá prst i myš — tlačítko skok jde zmáčknout i na PC
+    jumpBtn.addEventListener('pointerdown', e => {
+      e.preventDefault()
+      this.jumpHeld = true
+      if (jumpBtn.setPointerCapture) jumpBtn.setPointerCapture(e.pointerId)
+    })
+    const jumpEnd = () => { this.jumpHeld = false }
+    jumpBtn.addEventListener('pointerup', jumpEnd)
+    jumpBtn.addEventListener('pointercancel', jumpEnd)
+    jumpBtn.addEventListener('lostpointercapture', jumpEnd)
 
     const area = document.body
     area.addEventListener('touchstart', e => {
+      this._setMode('touch')
       if (!this.enabled) return
       for (const t of e.changedTouches) {
         if (t.target === jumpBtn) continue
@@ -114,9 +162,7 @@ export class Controls {
           const dx = t.clientX - this.lookLast.x
           const dy = t.clientY - this.lookLast.y
           this.lookLast = { x: t.clientX, y: t.clientY }
-          this.yaw -= dx * 0.0045
-          this.pitch -= dy * 0.0045
-          this.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, this.pitch))
+          this._addLook(dx, dy, 0.0045)
         }
       }
     }, { passive: false })
@@ -142,7 +188,7 @@ export class Controls {
 
   /** Pohybový vektor {x: strafe (+doprava), y: forward (+dopředu)} v rozsahu -1..1 */
   getMove() {
-    if (this.touch) return { ...this.joyVec }
+    if (Math.hypot(this.joyVec.x, this.joyVec.y) > 0) return { ...this.joyVec }
     let x = 0, y = 0
     if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) y += 1
     if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) y -= 1

@@ -45,10 +45,7 @@ export class UI {
     this.lastWaterMs = null
     this.runToken = null
 
-    if (isTouch) {
-      document.getElementById('instructions-desktop').style.display = 'none'
-      document.getElementById('instructions-mobile').style.display = 'block'
-    }
+    this.setInputMode(isTouch ? 'touch' : 'desktop')
 
     document.getElementById('start-btn').addEventListener('click', () => this.showQuiz())
     document.getElementById('quiz-continue').addEventListener('click', () => {
@@ -292,6 +289,17 @@ export class UI {
     this.hud.classList.remove('visible')
     this._refreshBestLabels()
     this.refreshBoards()
+  }
+
+  /** Přepne nápovědu a dotykové ovládání podle skutečně použitého vstupu. */
+  setInputMode(mode) {
+    const touch = mode === 'touch'
+    this.isTouch = touch
+    document.getElementById('instructions-desktop').style.display = touch ? 'none' : 'block'
+    document.getElementById('instructions-mobile').style.display = touch ? 'block' : 'none'
+    if (this.hud.classList.contains('visible')) {
+      document.getElementById('touch-ui').classList.toggle('visible', touch)
+    }
   }
 
   showPlaying(isTouch, total) {
