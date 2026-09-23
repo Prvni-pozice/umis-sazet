@@ -4,13 +4,12 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 
-// Sdílená logika s Vercel funkcemi — jeden zdroj pravdy pro token, týdny,
-// žebříčky i ověřovací kódy. Lokálně se liší jen úložiště (soubor místo KV)
-// a doručení kódu (console.log místo SMTP).
+// Sdílená logika s Vercel funkcemi — jeden zdroj pravdy pro token, týdny
+// i žebříčky. Lokálně se liší jen úložiště (soubor místo KV).
 import {
   signToken as libSignToken, verifyToken as libVerifyToken, todayPrague,
-  isoWeekId, sanitizeName, sanitizeEmail, boardPayload, issueCode,
-  consumeCode, MIN_TOTAL_MS, MAX_TOTAL_MS,
+  isoWeekId, sanitizeName, sanitizePhone, boardPayload,
+  MIN_TOTAL_MS, MAX_TOTAL_MS,
 } from './api/_lib.js'
 
 // Lokální podpisový klíč platí v rámci běhu serveru (restart = nová sada
@@ -23,7 +22,7 @@ const verifyToken = (token, ms) => libVerifyToken(SIGN_SECRET, token, ms)
 const DATA_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data', 'scores.json')
 
 function readStore() {
-  const empty = { scores: [], verified: {}, codes: {} }
+  const empty = { scores: [] }
   try { return { ...empty, ...JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')) } } catch { return empty }
 }
 function writeStore(d) {
@@ -69,10 +68,10 @@ function apiMiddleware(req, res, next) {
       }
       collectBody(req, data => {
         if (!data) return json(res, 400, { error: 'Neplatný požadavek.' })
-        const { name: rawName, email: rawEmail, msPlant, msWater, token: runToken } = data
+        const { name: rawName, phone: rawPhone, msPlant, msWater, token: runToken } = data
         const name = sanitizeName(rawName)
-        const email = rawEmail ? sanitizeEmail(rawEmail) : null
-        if (rawEmail && !email) return json(res, 400, { error: 'Neplatný e-mail.' })
+        const phone = rawPhone ? sanitizePhone(rawPhone) : null
+        if (rawPhone && !phone) return json(res, 400, { error: 'Neplatné telefonní číslo.' })
         const p = Number(msPlant), w = Number(msWater)
         const total = p + w
         if (!name || !isFinite(p) || !isFinite(w) || p <= 0 || w <= 0
@@ -87,50 +86,18 @@ function apiMiddleware(req, res, next) {
           return json(res, 403, { error: msg })
         }
         const store = readStore()
-        const official = !!(email && store.verified[email])
         const date = todayPrague()
         store.scores.push({
-          name, email: email || null,
+          name, phone: phone || null,
           msPlant: Math.round(p), msWater: Math.round(w), ms: Math.round(total),
-          date, weekId: isoWeekId(date), ts: Date.now(), official,
+          date, weekId: isoWeekId(date), ts: Date.now(),
         })
-        let needVerify = false
-        let mailError = null
-        if (email && !official) {
-          needVerify = true
-          const issued = issueCode(store, email)
-          if (issued.error) mailError = issued.error
-          // lokální dev: kód se neposílá mailem, jen do konzole serveru
-          else console.log(`[umis-sazet] Ověřovací kód pro ${email}: ${issued.code}`)
-        }
         writeStore(store)
-        json(res, 200, { board: boardPayload(store), needVerify, mailError })
+        json(res, 200, { board: boardPayload(store) })
       })
       return
     }
     return json(res, 405, { error: 'Method not allowed' })
-  }
-
-  // ── /api/verify ──
-  if (req.url.startsWith('/api/verify')) {
-    if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
-    collectBody(req, data => {
-      if (!data) return json(res, 400, { error: 'Neplatný požadavek.' })
-      const email = sanitizeEmail(data.email)
-      if (!email || !data.code) return json(res, 400, { error: 'Chybí e-mail nebo kód.' })
-      const store = readStore()
-      const result = consumeCode(store, email, data.code)
-      if (result !== 'ok') {
-        const msg = result === 'wrong' ? 'Nesprávný kód.'
-          : result === 'expired' ? 'Kód vypršel — ulož výsledek znovu, pošleme nový.'
-          : result === 'tooMany' ? 'Příliš mnoho pokusů — vyžádej si nový kód.'
-          : 'Žádný aktivní kód — ulož výsledek s e-mailem, kód dorazí.'
-        return json(res, 400, { error: msg })
-      }
-      writeStore(store)
-      json(res, 200, { board: boardPayload(store), verified: true })
-    })
-    return
   }
 
   return next()

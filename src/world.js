@@ -7,7 +7,7 @@ export const SIZE = 256       // půdorys krajiny v blocích
 export const HEIGHT = 30      // max výška sloupce
 export const WATER_LEVEL = 4  // index bloku hladiny; vodní plocha ~y=4.3
 export const BASE_LEVEL = 6   // základní úroveň luk — okraj mapy navazuje na horizont
-export const PLOT_COUNT = 15  // počet záhonů (5 řad po 3)
+export const PLOT_COUNT = 12  // počet záhonů (4 řady po 3)
 const PLOT_ROW_LEN = 3        // záhonů v jedné řadě
 const PLOT_ROW_STEP = 3       // rozestup mezi záhony v řadě (2 kostky mezera + 1 záhon)
 const MAX_PLOT_SPREAD = 50    // max vzájemná vzdálenost míst k výsadbě (blok = metr)
@@ -498,10 +498,26 @@ export class World {
   }
 
   // ── záhony (SOIL) k sázení: řady po PLOT_ROW_LEN, rozestup PLOT_ROW_STEP v řadě ──
+  // Celý layout se hledá opakovaně a do světa se zapíše, až když je kompletní
+  // (PLOT_COUNT záhonů) — hráč musí mít vždy stejný počet. Nekompletní pokus
+  // se zahodí; po vyčerpání pokusů se vezme nejlepší nalezený.
   _placeSoilPlots() {
-    this.soilPlots = [] // {x, z, y} — y = pochozí výška (vršek záhonu)
+    let best = []
+    for (let layout = 0; layout < 12 && best.length < PLOT_COUNT; layout++) {
+      const found = this._trySoilLayout()
+      if (found.length > best.length) best = found
+    }
+    this.soilPlots = best.map(c => ({ x: c.x, z: c.z, y: c.h })) // y = pochozí výška
+    for (const c of best) {
+      this.setBlock(c.x, c.h - 1, c.z, SOIL) // vrchní blok = ornice (pochozí, v úrovni)
+    }
+  }
+
+  /** Jeden pokus o rozmístění: vrací nalezené buňky {x, z, h}, bez zápisu do světa. */
+  _trySoilLayout() {
+    const placed = []
     const rows = Math.ceil(PLOT_COUNT / PLOT_ROW_LEN)
-    for (let r = 0; r < rows && this.soilPlots.length < PLOT_COUNT; r++) {
+    for (let r = 0; r < rows && placed.length < PLOT_COUNT; r++) {
       for (let attempt = 0; attempt < 4000; attempt++) {
         const horizontal = this.rng() < 0.5 // orientace řady: podél X, nebo podél Z
         const x0 = 8 + Math.floor(this.rng() * (SIZE - 16))
@@ -521,20 +537,18 @@ export class World {
         }
         if (!ok) continue
         // celá řada musí mít odstup od už umístěných záhonů (jiných řad)
-        if (this.soilPlots.some(s => cells.some(c => Math.hypot(s.x - c.x, s.z - c.z) < 14))) continue
+        if (placed.some(s => cells.some(c => Math.hypot(s.x - c.x, s.z - c.z) < 14))) continue
         // ...a zároveň zůstat v klastru: každé místo do MAX_PLOT_SPREAD/2 od kotvy
         // (1. záhon) → vzájemná vzdálenost libovolných dvou míst ≤ MAX_PLOT_SPREAD
-        if (this.soilPlots.length) {
-          const a = this.soilPlots[0]
+        if (placed.length) {
+          const a = placed[0]
           if (cells.some(c => Math.hypot(a.x - c.x, a.z - c.z) > MAX_PLOT_SPREAD / 2)) continue
         }
-        for (const c of cells) {
-          this.setBlock(c.x, c.h - 1, c.z, SOIL) // vrchní blok = ornice (pochozí, v úrovni)
-          this.soilPlots.push({ x: c.x, z: c.z, y: c.h })
-        }
+        placed.push(...cells)
         break
       }
     }
+    return placed
   }
 
   // ── květnatá louka (max 8×8) ──

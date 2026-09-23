@@ -10,9 +10,9 @@
     "test": "node scripts/controls.test.mjs"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "simplex-noise": "^4.0.3",
-    "three": "^0.166.1",
-    "nodemailer": "^6.9.14"
+    "three": "^0.166.1"
   },
   "devDependencies": {
     "vite": "^5.4.11"

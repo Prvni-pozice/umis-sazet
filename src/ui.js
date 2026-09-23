@@ -1,7 +1,7 @@
 // ui.js — start screen, kvíz, HUD (čas + počítadla + voda), win overlay se
-// dvěma časy, žebříček (týdenní oficiální/mimo soutěž + all-time), uložení
-// výsledku s e-mail ověřením. Jména se vykreslují výhradně přes textContent.
-import { fetchBoard, submitScore, verifyEmail, requestSession, getSavedName, saveName, getSavedEmail, saveEmail } from './leaderboard.js'
+// dvěma časy, žebříček (týdenní + all-time), uložení výsledku (jméno +
+// nepovinný telefon). Jména se vykreslují výhradně přes textContent.
+import { fetchBoard, submitScore, requestSession, getSavedName, saveName, getSavedPhone, savePhone } from './leaderboard.js'
 import { randomQuestion } from './quiz.js'
 
 const BEST_KEY = 'umis-sazet-best-ms'
@@ -36,9 +36,7 @@ export class UI {
     this.winBoard = document.getElementById('win-board')
     this.saveScoreBox = document.getElementById('save-score')
     this.nameInput = document.getElementById('player-name')
-    this.emailInput = document.getElementById('player-email')
-    this.verifyBox = document.getElementById('verify-box')
-    this.verifyCode = document.getElementById('verify-code')
+    this.phoneInput = document.getElementById('player-phone')
     this.saveStatus = document.getElementById('save-status')
     this.lastBoard = null
     this.lastPlantMs = null
@@ -59,15 +57,14 @@ export class UI {
       this.boardOverlay.classList.add('hidden')
     })
     document.getElementById('save-score-btn').addEventListener('click', () => this._submit())
-    document.getElementById('verify-btn').addEventListener('click', () => this._verify())
-    for (const input of [this.nameInput, this.emailInput, this.verifyCode]) {
+    for (const input of [this.nameInput, this.phoneInput]) {
       input.addEventListener('keydown', e => {
-        if (e.key === 'Enter') (input === this.verifyCode ? this._verify() : this._submit())
+        if (e.key === 'Enter') this._submit()
         e.stopPropagation() // ať psaní neovládá hru
       })
     }
     this.nameInput.value = getSavedName()
-    this.emailInput.value = getSavedEmail()
+    this.phoneInput.value = getSavedPhone()
     this.totalPlots = 0
 
     this._refreshBestLabels()
@@ -172,7 +169,7 @@ export class UI {
     const b = this.lastBoard
     if (!b) return
 
-    // start screen: TOP 3 tento týden (oficiální; fallback all-time)
+    // start screen: TOP 3 tento týden (fallback all-time)
     const medals = ['🥇', '🥈', '🥉']
     const top3src = (b.week && b.week.length) ? b.week : (b.allTime || [])
     const top3label = (b.week && b.week.length) ? `Tento týden nejrychlejší (${b.weekId}):` : 'Nejrychlejší všech dob:'
@@ -184,9 +181,8 @@ export class UI {
       })
     }
 
-    // overlay: týden oficiální + mimo soutěž + all-time + ATH + výherci minulého týdne
+    // overlay: týden + all-time + ATH + výherci minulého týdne
     this._fillList(document.getElementById('board-week'), b.week)
-    this._fillList(document.getElementById('board-week-unofficial'), b.weekUnofficial)
     this._fillList(document.getElementById('board-alltime'), b.allTime)
     const ath = document.getElementById('board-ath')
     ath.textContent = b.ath
@@ -203,7 +199,7 @@ export class UI {
     // win overlay board: týden TOP 10 + ATH
     this.winBoard.replaceChildren()
     if (b.week && b.week.length) {
-      this.winBoard.appendChild(this._muted(`Tento týden TOP 10 (oficiální):`))
+      this.winBoard.appendChild(this._muted('Tento týden TOP 10:'))
       b.week.forEach((e, i) => {
         this.winBoard.appendChild(this._row(medals[i] || `${i + 1}.`, e.name, e.ms))
       })
@@ -228,51 +224,26 @@ export class UI {
     if (this.lastPlantMs == null) return
     const name = this.nameInput.value.trim()
     if (!name) { this.nameInput.focus(); return }
-    const email = this.emailInput.value.trim().toLowerCase()
+    const phone = this.phoneInput.value.trim()
     saveName(name)
-    if (email) saveEmail(email)
+    savePhone(phone)
     const btn = document.getElementById('save-score-btn')
     btn.disabled = true
     btn.textContent = 'Ukládám…'
     this._setStatus('', '')
     try {
       if (!this.runToken) this.runToken = await requestSession() // fallback
-      const resp = await submitScore(name, email, this.lastPlantMs, this.lastWaterMs, this.runToken)
+      const resp = await submitScore(name, phone, this.lastPlantMs, this.lastWaterMs, this.runToken)
       this.lastBoard = resp.board || resp
       this._renderAll()
-      if (resp.needVerify) {
-        this.verifyBox.classList.add('visible')
-        this._setStatus('Výsledek uložen mimo soutěž — po ověření e-mailu se přesune do oficiálního žebříčku.', 'info')
-      } else {
-        this.saveScoreBox.classList.add('done')
-        this._setStatus(email ? '✅ Uloženo do oficiálního žebříčku.' : 'Uloženo mimo soutěž (bez e-mailu).', 'ok')
-      }
+      this.saveScoreBox.classList.add('done')
+      this._setStatus('✅ Uloženo do žebříčku.', 'ok')
     } catch (e) {
       btn.textContent = 'Zkusit znovu'
       this._setStatus(`Uložení selhalo: ${e.message}`, 'err')
     } finally {
       btn.disabled = false
       if (this.saveScoreBox.classList.contains('done')) btn.textContent = 'Uložit výsledek'
-    }
-  }
-
-  async _verify() {
-    const email = this.emailInput.value.trim().toLowerCase()
-    const code = this.verifyCode.value.trim()
-    if (!email || code.length !== 6) { this.verifyCode.focus(); return }
-    const btn = document.getElementById('verify-btn')
-    btn.disabled = true
-    try {
-      const resp = await verifyEmail(email, code)
-      this.lastBoard = resp.board || resp
-      this.verifyBox.classList.remove('visible')
-      this.saveScoreBox.classList.add('done')
-      this._setStatus('✅ E-mail ověřen — výsledky jsou v oficiálním žebříčku.', 'ok')
-      this._renderAll()
-    } catch (e) {
-      this._setStatus(`Ověření selhalo: ${e.message}`, 'err')
-    } finally {
-      btn.disabled = false
     }
   }
 
@@ -371,14 +342,12 @@ export class UI {
 
     // reset submit UI pro nové kolo
     this.saveScoreBox.classList.remove('done')
-    this.verifyBox.classList.remove('visible')
-    this.verifyCode.value = ''
     this._setStatus('', '')
     const btn = document.getElementById('save-score-btn')
     btn.disabled = false
     btn.textContent = 'Uložit výsledek'
     this.nameInput.value = getSavedName()
-    this.emailInput.value = getSavedEmail()
+    this.phoneInput.value = getSavedPhone()
 
     this.winOverlay.classList.remove('hidden')
     this.hud.classList.remove('visible')

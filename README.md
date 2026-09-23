@@ -1,6 +1,6 @@
 # Umíš sázet? 🌱
 
-Webová 3D voxel hra (Minecraft styl) — krajina Vysočiny. Zasaď 25 dubů,
+Webová 3D voxel hra (Minecraft styl) — krajina Vysočiny. Zasaď 12 doubků,
 pak je zalij vodou z rybníka. Měří se čas obou fází zvlášť, na týdenní
 žebříček jde součet.
 
@@ -8,34 +8,36 @@ pak je zalij vodou z rybníka. Měří se čas obou fází zvlášť, na týdenn
 
 1. **Kvíz** — před startem 1 náhodný tip o výsadbě dubů (jen edukativní,
    čas neovlivňuje). Pool 20 otázek v `src/quiz.js` (⚠ placeholder texty).
-2. **Fáze 1 — sázení**: projdi všech 25 hnědých záhonů (průchod = zasadit,
+2. **Fáze 1 — sázení**: projdi všech 12 hnědých záhonů (průchod = zasadit,
    animace ruky se sazeničkou). Markery 🌱 ukazují nejbližších 8 záhonů.
 3. **Fáze 2 — zalévání**: naber vodu dotykem vodní plochy (vědro = 5 dílků,
    ukazatel na pravém boku), průchodem přes sazenici ji zaliješ — vyroste
    v mladý dub. Markery 💧.
 4. **Konec**: dva časy + součet; výsledek lze uložit na žebříček.
 
-## Žebříček + ověření e-mailu
+## Žebříček
 
-- **Oficiální žebříček** = hráči s ověřeným e-mailem (6místný kód mailem,
-  ověření platí navždy). Bez e-mailu / před ověřením jde výsledek
-  „mimo soutěž".
+- Do žebříčku jde **každý uložený výsledek** — žádné ověřování, stačí jméno.
+- **Telefon je nepovinný** — jediná cesta, jak se ozvat výherci týdne.
+  Nikde se nezobrazuje, v odpovědi API se nevrací.
 - **Týdenní vyhodnocení** (ISO týden, Europe/Prague): první 3 každý týden
   něco vyhrají. Tie-break: při stejném čase je výš starší výsledek.
 - Anti-cheat: server na startu kola vydá podepsaný token; POST ověří,
   že od vydání uplynul aspoň součet časů. Skóre počítá server.
-- E-mail se nikde nezobrazuje, slouží jen k ověření a kontaktu výherců.
 
 ## Stack
 
 - Vite + Three.js (vanilla JS), WebAudio zvuky, procedurální textury.
 - `src/world.js` — voxel krajina: kopce, smrky/duby, 2 rybníky, obilná pole,
-  květnatá louka, 25 záhonů (SOIL bloky).
+  květnatá louka, 12 záhonů (SOIL bloky, `PLOT_COUNT`; layout se hledá
+  opakovaně, dokud se nevejde celý).
 - `src/planting.js` — sazenice, zalévání, růst. `src/hand.js` — FP ruka.
-- `api/scores.js`, `api/verify.js` — Vercel funkce; sdílená logika `api/_lib.js`;
+- `api/scores.js` — Vercel funkce; sdílená logika `api/_lib.js`;
   úložiště Vercel KV / Upstash (klíč `umis-sazet-store`).
 - Lokální dev: stejné API ve `vite.config.js` middleware (store
-  `data/scores.json`, ověřovací kód se místo SMTP loguje do konzole).
+  `data/scores.json`).
+- Vercel Web Analytics: `@vercel/analytics` — ve vanilla buildu se volá
+  `inject()` v `src/main.js` (ne React komponenta `<Analytics/>`).
 
 ## Vývoj
 
@@ -47,13 +49,11 @@ npm run build   # dist/
 
 ## Deploy (Vercel)
 
-1. Nový Vercel projekt (preset Vite) napojený na GitHub repo.
+Běží na <https://hra-doubky.srdcemrozumem.cz/>.
+
+1. Vercel projekt (preset Vite) napojený na GitHub repo — push do `master` = deploy.
 2. Storage → Upstash Redis (env `KV_REST_API_URL/TOKEN` vzniknou samy).
-3. Env pro odesílání ověřovacích kódů (SMTP 1pmail.cz, **587 STARTTLS**):
-   - `SMTP_USER` = podpora@prvni-pozice.com
-   - `SMTP_PASS` = (heslo)
-   - volitelně `SMTP_HOST` (default 1pmail.cz), `SMTP_PORT` (default 587),
-     `SMTP_FROM`, `SIGNING_SECRET` (jinak se podepisuje KV tokenem)
+3. Volitelně `SIGNING_SECRET` (jinak se anti-cheat token podepisuje KV tokenem).
 
 ## Placeholder assety
 

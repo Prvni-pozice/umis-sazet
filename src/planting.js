@@ -1,4 +1,4 @@
-// planting.js — 25 záhonů: fáze 1 = sázení (průchod záhonem), fáze 2 =
+// planting.js — záhony (PLOT_COUNT): fáze 1 = sázení (průchod záhonem), fáze 2 =
 // zalévání (průchod se zásobou vody). Zalitá sazenice vyroste v mladý dub.
 import * as THREE from 'three'
 

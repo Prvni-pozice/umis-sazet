@@ -2,15 +2,14 @@
 // Úložiště: Vercel KV / Upstash Redis REST (env KV_REST_API_URL/TOKEN nebo
 // UPSTASH_REDIS_REST_*). Bez nich vrací 501.
 //
-// POST: { name, email?, msPlant, msWater, token }
+// POST: { name, phone?, msPlant, msWater, token }
 //  - anti-cheat token váže SOUČET časů (viz _lib.verifyToken)
-//  - s ověřeným e-mailem → oficiální výsledek; jinak mimo soutěž
-//  - s neověřeným e-mailem se rovnou odešle ověřovací kód (needVerify: true)
+//  - telefon je nepovinný, slouží jen ke kontaktu výherce týdne (nikde se nezobrazuje)
 // Stejná logika běží lokálně ve vite.config.js middleware.
 
 import {
   kvEnv, kvGet, kvSet, signToken, verifyToken, todayPrague, isoWeekId,
-  sanitizeName, sanitizeEmail, boardPayload, issueCode, sendCodeMail,
+  sanitizeName, sanitizePhone, boardPayload,
   MIN_TOTAL_MS, MAX_TOTAL_MS, readBody,
 } from './_lib.js'
 
@@ -34,11 +33,11 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { name: rawName, email: rawEmail, msPlant, msWater, token: runToken } = readBody(req)
+    const { name: rawName, phone: rawPhone, msPlant, msWater, token: runToken } = readBody(req)
     const name = sanitizeName(rawName)
-    const email = rawEmail ? sanitizeEmail(rawEmail) : null
-    if (rawEmail && !email) {
-      res.status(400).json({ error: 'Neplatný e-mail.' })
+    const phone = rawPhone ? sanitizePhone(rawPhone) : null
+    if (rawPhone && !phone) {
+      res.status(400).json({ error: 'Neplatné telefonní číslo.' })
       return
     }
     const p = Number(msPlant), w = Number(msWater)
@@ -58,31 +57,16 @@ export default async function handler(req, res) {
     }
 
     const store = await kvGet(url, token)
-    const official = !!(email && store.verified[email])
     const date = todayPrague()
     store.scores.push({
-      name, email: email || null,
+      name, phone: phone || null,
       msPlant: Math.round(p), msWater: Math.round(w), ms: Math.round(total),
-      date, weekId: isoWeekId(date), ts: Date.now(), official,
+      date, weekId: isoWeekId(date), ts: Date.now(),
     })
     if (store.scores.length > 5000) store.scores = store.scores.slice(-5000)
 
-    // neověřený e-mail → poslat kód (pokud to rate-limit dovolí)
-    let needVerify = false
-    let mailError = null
-    if (email && !official) {
-      needVerify = true
-      const issued = issueCode(store, email)
-      if (issued.error) {
-        mailError = issued.error
-      } else {
-        try { await sendCodeMail(email, issued.code) }
-        catch (e) { mailError = `Kód se nepodařilo odeslat: ${e.message}` }
-      }
-    }
-
     await kvSet(url, token, store)
-    res.status(200).json({ board: boardPayload(store), needVerify, mailError })
+    res.status(200).json({ board: boardPayload(store) })
     return
   }
 

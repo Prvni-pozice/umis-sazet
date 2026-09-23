@@ -1,8 +1,8 @@
-// leaderboard.js — klient žebříčku: GET/POST /api/scores, POST /api/verify.
-// Jméno a e-mail hráče v localStorage. Server je lokální Vite middleware
+// leaderboard.js — klient žebříčku: GET/POST /api/scores.
+// Jméno a telefon hráče v localStorage. Server je lokální Vite middleware
 // (VPS) nebo Vercel funkce — stejné relativní URL.
 const NAME_KEY = 'umis-sazet-name'
-const EMAIL_KEY = 'umis-sazet-email'
+const PHONE_KEY = 'umis-sazet-phone'
 
 export function getSavedName() {
   return localStorage.getItem(NAME_KEY) || ''
@@ -10,11 +10,11 @@ export function getSavedName() {
 export function saveName(name) {
   localStorage.setItem(NAME_KEY, name)
 }
-export function getSavedEmail() {
-  return localStorage.getItem(EMAIL_KEY) || ''
+export function getSavedPhone() {
+  return localStorage.getItem(PHONE_KEY) || ''
 }
-export function saveEmail(email) {
-  localStorage.setItem(EMAIL_KEY, email)
+export function savePhone(phone) {
+  localStorage.setItem(PHONE_KEY, phone)
 }
 
 export async function fetchBoard() {
@@ -32,24 +32,12 @@ export async function requestSession() {
 }
 
 // msPlant/msWater = časy obou fází; server ověří token proti součtu.
-// Bez e-mailu (nebo před ověřením) jde výsledek mimo soutěž.
-export async function submitScore(name, email, msPlant, msWater, token) {
+// Telefon je nepovinný — jen kontakt na výherce týdne.
+export async function submitScore(name, phone, msPlant, msWater, token) {
   const r = await fetch('/api/scores', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, email, msPlant, msWater, token }),
-  })
-  const data = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`)
-  return data
-}
-
-// Ověření e-mailu 6místným kódem — přesune výsledky do oficiálního žebříčku.
-export async function verifyEmail(email, code) {
-  const r = await fetch('/api/verify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, code }),
+    body: JSON.stringify({ name, phone, msPlant, msWater, token }),
   })
   const data = await r.json().catch(() => ({}))
   if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`)

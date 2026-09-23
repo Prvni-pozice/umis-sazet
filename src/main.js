@@ -17,6 +17,7 @@ import { Particles } from './particles.js'
 import { UI } from './ui.js'
 import { QualityManager } from './quality.js'
 import { AudioFX } from './audio.js'
+import { inject as injectAnalytics } from '@vercel/analytics'
 
 const WATER_CAP = 5      // dílků vody ve vědru
 
@@ -472,4 +473,5 @@ class Game {
   }
 }
 
+injectAnalytics() // Vercel Web Analytics (vanilla build — ne React komponenta)
 new Game()

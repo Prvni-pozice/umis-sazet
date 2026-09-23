@@ -213,7 +213,7 @@
     .winners-line { margin: 0 0 18px; font-size: 0.9rem; opacity: 0.75; max-width: 560px; }
     .winners-line:empty { display: none; }
 
-    /* ── uložení výsledku + ověření e-mailu ── */
+    /* ── uložení výsledku ── */
     .save-score { display: flex; gap: 10px; margin: 14px 0 6px; flex-wrap: wrap; justify-content: center; }
     .save-score input {
       font-size: 1.05rem; padding: 12px 16px; border-radius: 12px;
@@ -224,16 +224,6 @@
     .save-score button { font-size: 1.05rem !important; padding: 12px 26px !important; }
     .save-score.done { display: none; }
     .privacy-note { font-size: 0.75rem; opacity: 0.5; max-width: 420px; line-height: 1.5; margin-top: 4px; }
-    #verify-box { display: none; margin-top: 12px; }
-    #verify-box.visible { display: flex; flex-direction: column; gap: 10px; align-items: center; }
-    #verify-box .hint { font-size: 0.9rem; color: #b8ffd0; max-width: 420px; line-height: 1.5; }
-    #verify-box .row { display: flex; gap: 10px; }
-    #verify-box input {
-      font-size: 1.3rem; padding: 10px 14px; border-radius: 12px; width: 150px;
-      border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(10, 28, 14, 0.6);
-      color: #eefbee; outline: none; text-align: center; letter-spacing: 0.3em;
-    }
-    #verify-box button { font-size: 1rem !important; padding: 10px 22px !important; }
     #save-status { font-size: 0.9rem; margin-top: 8px; min-height: 1.4em; }
     #save-status.ok { color: #7dffb0; }
     #save-status.err { color: #ff9c8f; }
@@ -278,21 +268,17 @@
     <h1>🏆 Nejlepší sazeči</h1>
     <div class="board-cols">
       <div class="board-col">
-        <h2>Tento týden — oficiální</h2>
+        <h2>Tento týden</h2>
         <ol id="board-week"></ol>
       </div>
       <div class="board-col">
-        <h2>Tento týden — mimo soutěž</h2>
-        <ol id="board-week-unofficial"></ol>
-      </div>
-      <div class="board-col">
-        <h2>Všech dob — oficiální</h2>
+        <h2>Všech dob</h2>
         <ol id="board-alltime"></ol>
       </div>
     </div>
     <div class="ath-line" id="board-ath"></div>
     <div class="winners-line" id="board-winners"></div>
-    <div class="privacy-note">Oficiální žebříček = hráči s ověřeným e-mailem. Každý týden první 3 něco vyhrají — při stejném čase je výš dřívější výsledek.</div>
+    <div class="privacy-note">Každý týden první 3 něco vyhrají — při stejném čase je výš dřívější výsledek.</div>
     <button id="board-close">Zavřít</button>
   </div>
 
@@ -307,17 +293,10 @@
     <div class="best-line" id="win-best"></div>
     <div class="save-score" id="save-score">
       <input id="player-name" maxlength="24" placeholder="Tvoje jméno" autocomplete="nickname" />
-      <input id="player-email" maxlength="80" placeholder="E-mail (pro oficiální žebříček)" autocomplete="email" type="email" />
+      <input id="player-phone" maxlength="20" placeholder="Telefon (nepovinné)" autocomplete="tel" type="tel" inputmode="tel" />
       <button id="save-score-btn">Uložit výsledek</button>
     </div>
-    <div class="privacy-note">Bez e-mailu se výsledek uloží mimo soutěž. E-mail slouží jen k ověření a kontaktování výherců týdne — nikde se nezobrazuje.</div>
-    <div id="verify-box">
-      <div class="hint">📧 Poslali jsme ti 6místný kód. Zadej ho a tvé výsledky se zařadí do oficiálního žebříčku (stačí jednou, platí navždy).</div>
-      <div class="row">
-        <input id="verify-code" maxlength="6" inputmode="numeric" placeholder="······" />
-        <button id="verify-btn">Ověřit</button>
-      </div>
-    </div>
+    <div class="privacy-note">Telefon je nepovinný — ale kdybys časem něco vyhrál/a, je to jediná cesta, jak se ti ozvat. Nikde se nezobrazuje a slouží jen ke kontaktování výherců.</div>
     <div id="save-status"></div>
     <div class="board-mini" id="win-board"></div>
     <button id="replay-btn" style="margin-top: 18px;">↻&nbsp; Hrát znovu (nová krajina)</button>
